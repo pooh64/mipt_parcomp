@@ -39,7 +39,7 @@ int main(int argc, char **argv)
 	life_field_init(&field[0], w / LIFE_TILE_SIZE, h / LIFE_TILE_SIZE);
 	life_field_init(&field[1], w / LIFE_TILE_SIZE, h / LIFE_TILE_SIZE);
 
-#if 0
+#ifdef EXPLODER
 	life_tile_t tile;
 	life_tile_from_str(&tile, tile_exploder_str);
 	life_field_set_tile(&field[0], &tile, field[0].w/2, field[0].h/2);
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 #ifdef LIFE_ENABLE_GUI
 		life_field_display(cur);
 		refresh();
-		usleep(1024L * 64);
+		usleep(1024L * 128);
 #else
 		if (cl_frames++ == 64) {
 			cl = clock() - cl;

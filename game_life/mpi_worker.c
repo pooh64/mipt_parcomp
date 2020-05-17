@@ -123,7 +123,7 @@ void master()
 		TRACE("no slaves in process!");
 		return;
 	}
-	life_field_t *field;
+	life_field_t field;
 	ssize_t rc, field_buf_sz;
 
 	int sock = setup_worker_socket();
@@ -132,18 +132,18 @@ void master()
 		life_field_init(&field, w / LIFE_TILE_SIZE, h / LIFE_TILE_SIZE);
 		life_field_rand(&field);
 	} else {
-		struct gui_server_info;
+		struct gui_server_info info;
 		rc = readn(sock, &info, sizeof(info));
 		if (rc != sizeof(info)) {
 			TRACE("Error: can't receive gui info");
-			MPI_Abort(1);
+			MPI_Abort(MPI_COMM_WORLD, 1);
 		}
-		field_buf_sz = sizeof(*field->buf) * info.field_w * info.field_h;
+		field_buf_sz = sizeof(*field.buf) * info.field_w * info.field_h;
 		life_field_init(&field, info.field_w, info.field_h);
-		rc = readn(sock, field->buf, field_buf_sz);
+		rc = readn(sock, field.buf, field_buf_sz);
 		if (rc != field_buf_sz) {
 			TRACE("Error: can't receive gui field");
-			MPI_Abort(1);
+			MPI_Abort(MPI_COMM_WORLD, 1);
 		}
 	}
 	int cl_frames = 0;
@@ -162,10 +162,10 @@ void master()
 			cl_frames = 0;
 		}
 		if (sock >= 0) {
-			rc = writen(sock, field->buf, field_buf_sz);
+			rc = writen(sock, field.buf, field_buf_sz);
 			if (rc != field_buf_sz) {
 				TRACE("Error: can't send gui field");
-				MPI_Abort(1);
+				MPI_Abort(MPI_COMM_WORLD, 1);
 			}
 		}
 	}
