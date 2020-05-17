@@ -1,61 +1,11 @@
-#include <curses.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
+#include "life_core.h"
 
-#include <unistd.h>
-
-#define LIFE_TILE_SIZE 8
-typedef struct life_tile {
-	uint8_t buf[LIFE_TILE_SIZE][LIFE_TILE_SIZE];
-} life_tile_t;
-
-void life_tile_from_str(life_tile_t *tile, char *str)
-{
-	strncpy((char*) tile, str, sizeof(*tile));
-	size_t len = strlen(str);
-	for (size_t i = 0; i < len && i < sizeof(*tile); ++i)
-		((char*) (*tile->buf))[i] = (str[i] == '#') ? 1 : 0;
-}
-
-static inline
-void life_tile_display(life_tile_t *tile, int tile_x, int tile_y)
-{
-	tile_x *= (LIFE_TILE_SIZE);
-	tile_y *= (LIFE_TILE_SIZE);
-
-	for (uint8_t y = 0; y < LIFE_TILE_SIZE; ++y) {
-		for (uint8_t x = 0; x < LIFE_TILE_SIZE; ++x) {
-			uint8_t ch = tile->buf[y][x];
-			ch = ch ? '#' : ' ';
-			mvaddch(tile_y + y, tile_x + x, ch);
-		}
-	}
-}
-
-char *tile_glider_str =
-"        "
-"    #   "
-"  # #   "
-"   ##   "
-"        "
-"        "
-"        "
-"        ";
-
-char *tile_exploder_str =
-"        "
-" # # #  "
-" #   #  "
-" #   #  "
-" #   #  "
-" # # #  "
-"        "
-"        ";
-
-typedef struct life_field {
-	int w, h;
-	life_tile_t *buf;
-} life_field_t;
+typedef struct life_tile_ext {
+	uint8_t buf[LIFE_TILE_SIZE+2][LIFE_TILE_SIZE+2];
+} life_tile_ext_t;
 
 void life_field_init(life_field_t *field, int tile_w, int tile_h)
 {
@@ -66,24 +16,10 @@ void life_field_init(life_field_t *field, int tile_w, int tile_h)
 	memset(field->buf, 0, sz);
 }
 
-static inline
 void life_field_set_tile(life_field_t *field, life_tile_t *tile, int x, int y)
 {
 	field->buf[field->w * y + x] = *tile;
 }
-
-void life_field_display(life_field_t *field)
-{
-	for (int y = 0; y < field->h; ++y) {
-		for (int x = 0; x < field->w; ++x)
-			life_tile_display(&field->buf[field->w*y + x], x, y);
-	}
-}
-
-
-typedef struct life_tile_ext {
-	uint8_t buf[LIFE_TILE_SIZE+2][LIFE_TILE_SIZE+2];
-} life_tile_ext_t;
 
 static inline void
 life_tile_to_ext(life_tile_t *in, uint8_t *top, uint8_t *bot, int w, int id,
@@ -151,9 +87,7 @@ void life_line_evolve(life_tile_t *in, uint8_t *top, uint8_t *bot,
 	}
 }
 
-static inline
-void life_field_get_bounds(life_field_t *in, uint8_t *top, uint8_t *bot,
-		int line)
+void life_field_get_top_bound(life_field_t *in, uint8_t *top, int line)
 {
 	life_tile_t *ptr;
 	for (int i = 0; i < in->w; ++i) {
@@ -163,59 +97,31 @@ void life_field_get_bounds(life_field_t *in, uint8_t *top, uint8_t *bot,
 				top[x] = ptr->buf[LIFE_TILE_SIZE-1][x];
 			else
 				top[x] = 0;
+		}
+		top += LIFE_TILE_SIZE;
+	}
+}
 
+void life_field_get_bot_bound(life_field_t *in, uint8_t *bot, int line)
+{
+	life_tile_t *ptr;
+	for (int i = 0; i < in->w; ++i) {
+		for (int x = 0; x < LIFE_TILE_SIZE; ++x) {
 			ptr = &in->buf[(line+1)*in->w + i];
 			if (line != in->h - 1)
 				bot[x] = ptr->buf[0][x];
 			else
 				bot[x] = 0;
 		}
-		top += LIFE_TILE_SIZE;
 		bot += LIFE_TILE_SIZE;
 	}
 }
 
-
-void life_field_evolve(life_field_t *in, life_field_t *out)
+void life_field_rand(life_field_t *field)
 {
-	int line_len = sizeof(uint8_t) * in->w * LIFE_TILE_SIZE;
-	uint8_t *top = malloc(line_len);
-	uint8_t *bot = malloc(line_len);
-
-	for (int y = 0; y < in->h; ++y) {
-		life_field_get_bounds(in, top, bot, y);
-		life_line_evolve(&in->buf[y * in->w], top, bot, &out->buf[y * in->w], in->w);
-	}
-	free(top);
-	free(bot);
-}
-
-int main(int argc, char **argv)
-{
-	initscr();
-	cbreak();
-	noecho();
-	keypad(stdscr, TRUE);
-
-	int h, w;
-	getmaxyx(stdscr, h, w);
-
-	life_tile_t tile;
-	life_tile_from_str(&tile, tile_exploder_str);
-	life_field_t field[2];
-	life_field_init(&field[0], w / LIFE_TILE_SIZE, h / LIFE_TILE_SIZE);
-	life_field_init(&field[1], w / LIFE_TILE_SIZE, h / LIFE_TILE_SIZE);
-	life_field_set_tile(&field[0], &tile, field[0].w/2, field[0].h/2);
-
-	life_field_t *cur = &field[0], *tmp = &field[1], *swp;
-	for (int frame = 0; frame < 20000; ++frame) {
-		life_field_display(cur);
-		refresh();
-		usleep(1024L * 256);
-		life_field_evolve(cur, tmp);
-		swp = cur; cur = tmp; tmp = swp;
-	}
-
-	endwin();
-	return 0;
+	srand(time(0));
+	size_t sz = field->w * field->h * sizeof(*field->buf);
+	uint8_t *ptr = (uint8_t*) &field->buf[0];
+	for (size_t i = 0; i < sz; ++i)
+		ptr[i] = (rand() % 3 == 0) ? 1 : 0;
 }
